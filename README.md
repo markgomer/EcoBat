@@ -12,14 +12,14 @@ EcoBat is a Perl script designed to capture network packets and identify potenti
 
 git clone <repository-url>
 
-css
+
 
 
 2. Navigate to the directory containing the script:
 
 cd EcoBat
 
-vbnet
+
 
 
 3. Ensure that Perl and the required Perl modules are installed on your system. If not, install them using your system's package manager or CPAN.
@@ -30,7 +30,7 @@ vbnet
 
 ./ecobat.pl
 
-css
+
 
 
 6. The script will start capturing packets on the specified IP address. It will log packet details to `pacotes.log` and perform a traceroute to the IP address that generates the most traffic, saving the result to a log file named `<most_common_ip>-traceroute.log`.
