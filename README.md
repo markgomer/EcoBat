@@ -5,22 +5,20 @@ EcoBat is a Perl script designed to capture network packets and identify potenti
 
 ## Prerequisites
 - Perl installed on your system
-- Required Perl modules: Net::PcapUtils, NetPacket::Ethernet, NetPacket::IP, NetPacket::TCP, Data::HexDump, Net::Traceroute
+- Required Perl modules: `Net::PcapUtils`, `NetPacket::Ethernet`, `NetPacket::IP`, `NetPacket::TCP`, `Data::HexDump`, `Net::Traceroute`.
 
 ## Usage
 1. Clone the repository to your local machine:
 
+```bash
 git clone <repository-url>
-
-
-
+```
 
 2. Navigate to the directory containing the script:
 
+```bash
 cd EcoBat
-
-
-
+```
 
 3. Ensure that Perl and the required Perl modules are installed on your system. If not, install them using your system's package manager or CPAN.
 
@@ -28,10 +26,9 @@ cd EcoBat
 
 5. Run the script:
 
+```bash
 ./ecobat.pl
-
-
-
+```
 
 6. The script will start capturing packets on the specified IP address. It will log packet details to `pacotes.log` and perform a traceroute to the IP address that generates the most traffic, saving the result to a log file named `<most_common_ip>-traceroute.log`.
 
