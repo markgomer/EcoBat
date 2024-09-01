@@ -63,8 +63,6 @@ sub process_pkt {
 }
 
 sub main {
-    my $ip_address = '192.168.113.86'; #Change the target
-
     my $desenho = '
     ....._      
     `.   ``-.                               .-----.._
@@ -97,6 +95,12 @@ sub main {
     print $desenho;
     print $title;
 
+    # Check if an IP address was provided as an argument
+    if (@ARGV != 1) {
+        die "Usage: $0 <ip_address>\n";
+    }
+
+    my $ip_address = $ARGV[0];
     sniff($ip_address);
 }
 

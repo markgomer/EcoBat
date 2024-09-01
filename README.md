@@ -27,7 +27,12 @@ cd EcoBat
 5. Run the script:
 
 ```bash
-./ecobat.pl
+./ecobat.pl <ip_address>
+```
+
+Example:
+```bash
+./ecobat.pl 192.168.0.1
 ```
 
 6. The script will start capturing packets on the specified IP address. It will log packet details to `pacotes.log` and perform a traceroute to the IP address that generates the most traffic, saving the result to a log file named `<most_common_ip>-traceroute.log`.
