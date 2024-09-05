@@ -1,6 +1,7 @@
 #!/usr/bin/perl
 
 use strict;
+use warnings;
 use Net::PcapUtils;
 use NetPacket::Ethernet;
 use NetPacket::IP;
@@ -101,6 +102,12 @@ sub main {
     }
 
     my $ip_address = $ARGV[0];
+
+    # Basic IP address validation
+    unless ($ip_address =~ /^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/) {
+        die "Invalid IP address format. Please use xxx.xxx.xxx.xxx\n";
+    }
+
     sniff($ip_address);
 }
 
