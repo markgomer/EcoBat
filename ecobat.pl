@@ -2,36 +2,45 @@
 
 use strict;
 use warnings;
+use Socket;
 use Net::PcapUtils;
 use NetPacket::Ethernet;
 use NetPacket::IP;
 use NetPacket::TCP;
-use Data::HexDump;
 use Net::Traceroute;
+use IO::File;
 use Time::HiRes qw(time alarm);
 
-my $fh;
+# Constants for TCP flags
+use constant SYN_FLAG => 0x02;
+use constant ACK_FLAG => 0x10;
+
+# Initialize variables
+my $filename = "IPsForFQDN.txt";
+my $log_file = 'pacotes.log';
+my $duration = 300;  # Duration in seconds
+my $packet_limit = 10000;  # Packet limit
+my $scan_threshold = 100;  # Threshold for detecting scans
+my $attempt_threshold = 10;  # Threshold for connection attempts
+my $ddos_threshold = 1000;  # Threshold for detecting DDoS
 my %ip_count;
+my %attack_logs;
 my $i = 0;
 my $start_time;
-my $duration = 300;  # Set duration to 5 minutes (300 seconds)
-my $packet_limit = 10000;  # Set a limit of 10,000 packets
 my $is_running = 1;
-my $log_file = 'pacotes.log';
 
 $SIG{INT} = \&finish_up;
-
 
 sub finish_up {
     $is_running = 0;
     print "\nCapture interrupted. Finishing up...\n";
 }
 
-
 sub sniff {
     my ($ip_address) = @_;
 
-    open($fh, '>', $log_file) or die "Unable to open log file: $!";
+    # Open log file for appending
+    my $fh = IO::File->new(">> $log_file") or die "Cannot open log file: $!";
 
     print "\nStarting packet capture for IP: $ip_address\n";
     print "Will capture for $duration seconds or $packet_limit packets, whichever comes first.\n";
@@ -42,7 +51,7 @@ sub sniff {
     eval {
         Net::PcapUtils::loop(sub {
             my ($user_data, $header, $packet) = @_;
-            process_pkt($user_data, $header, $packet);
+            process_pkt($user_data, $header, $packet, $fh);
             if (!$is_running || $i >= $packet_limit || (time - $start_time) >= $duration) {
                 die "LoopBreak\n";
             }
@@ -59,23 +68,53 @@ sub sniff {
     analyze_results($ip_address);
 }
 
-
 sub process_pkt {
-    my ($user_data, $hdr, $pkt) = @_;
+    my ($user_data, $hdr, $pkt, $fh) = @_;
     my $eth = NetPacket::Ethernet->decode($pkt);
     if ($eth->{type} == 2048) {
         my $ip = NetPacket::IP->decode($eth->{data});
         if ($ip->{proto} == 6) {
             my $tcp = NetPacket::TCP->decode($ip->{data});
             print $fh "\n\n$i $ip->{src_ip}($tcp->{src_port}) -> $ip->{dest_ip}($tcp->{dest_port})\n";
-            print $fh HexDump $ip->{data};
+            print $fh "Flags: SYN:" . (($tcp->{flags} & SYN_FLAG) ? '1' : '0') . " ACK:" . (($tcp->{flags} & ACK_FLAG) ? '1' : '0') . "\n";
+            print $fh "Time: " . localtime(time) . "\n";
+            print $fh HexDump($ip->{data});
             $i++;
 
             $ip_count{$ip->{src_ip}}++;
+
+            # Heuristic analysis
+            if ($ip_count{$ip->{src_ip}} > $scan_threshold) {
+                print $fh "Warning: Possible port scan from $ip->{src_ip}, detected $ip_count{$ip->{src_ip}} packets.\n";
+                $attack_logs{$ip->{src_ip}}{scan}++;
+            }
+            if ($tcp->{flags} & SYN_FLAG && $ip_count{$ip->{src_ip}} > $attempt_threshold) {
+                print $fh "Warning: Possible attack attempt from $ip->{src_ip}, detected $ip_count{$ip->{src_ip}} packets with SYN flag.\n";
+                system("iptables -A INPUT -s $ip->{src_ip} -j DROP");
+                print $fh "Blocked IP $ip->{src_ip} via iptables\n";
+                $attack_logs{$ip->{src_ip}}{brute_force}++;
+            }
+            if ($ip_count{$ip->{src_ip}} > $ddos_threshold) {
+                print $fh "Warning: Possible DDoS attack from $ip->{src_ip}, detected $ip_count{$ip->{src_ip}} packets.\n";
+                $attack_logs{$ip->{src_ip}}{ddos}++;
+            }
         }
     }
 }
 
+sub HexDump {
+    my ($data) = @_;
+    my $dump = '';
+    for (my $i = 0; $i < length($data); $i += 16) {
+        my $chunk = substr($data, $i, 16);
+        my $hex = unpack('H*', $chunk);
+        $hex =~ s/(.{2})/$1 /g;
+        my $ascii = $chunk;
+        $ascii =~ s/[^ -~]/./g;
+        $dump .= sprintf("%04x  %-48s  %s\n", $i, $hex, $ascii);
+    }
+    return $dump;
+}
 
 sub analyze_results {
     my ($target_ip) = @_;
@@ -146,8 +185,16 @@ sub analyze_results {
         $count++;
         last if $count == 5 or $count == scalar(@sorted_ips);
     }
-}
 
+    print "\nDetailed attack logs:\n";
+    foreach my $ip (keys %attack_logs) {
+        my $log = $attack_logs{$ip};
+        print "IP: $ip\n";
+        print "Scan attacks detected: $log->{scan}\n" if $log->{scan};
+        print "Brute force attempts detected: $log->{brute_force}\n" if $log->{brute_force};
+        print "DDoS attacks detected: $log->{ddos}\n" if $log->{ddos};
+    }
+}
 
 sub main {
     my $desenho = '
@@ -176,23 +223,18 @@ sub main {
         |        \  \__(  <_> )    |   \ / __ \|  |  
         /_______  /\___  >____/|______  /(____  /__|  
                 \/     \/             \/      \/      
+';
 
-    ';
+    print "$title\n";
+    print "$desenho\n";
+    print "This script monitors network traffic, detects potential attacks, and performs traceroutes.\n";
+    print "Usage: $0 <IP address>\n";
 
-    print $desenho;
-    print $title;
-
-    # Check if an IP address was provided as an argument
     if (@ARGV != 1) {
-        die "Usage: $0 <ip_address>\n";
+        die "Usage: $0 <IP address>\n";
     }
 
     my $ip_address = $ARGV[0];
-
-    unless ($ip_address =~ /^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/) {
-        die "Invalid IP address format. Please use xxx.xxx.xxx.xxx\n";
-    }
-
     sniff($ip_address);
 }
 
